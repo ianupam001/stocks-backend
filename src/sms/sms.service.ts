@@ -24,13 +24,14 @@ export class SmsService {
   async sendOtp(phone: string) {
     return await this.SMSTransport.twilioPhoneVerify(phone);
   }
- 
+
   async verifyOtp(phone: string, otp: string) {
     try {
       const response = await this.SMSTransport.twilioOtpVerification(
         phone,
         otp,
       );
+      console.log({ response });
       return response;
     } catch (error) {
       console.log({ error });

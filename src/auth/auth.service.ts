@@ -4,6 +4,7 @@ import { SmsService } from '../sms/sms.service';
 import { UsersService } from '../users/users.service';
 import { AuthResponseDto } from './dto/auth-response.dto';
 import { Roles } from '@prisma/client';
+import { AuthUserResponseDto } from './dto';
 
 @Injectable()
 export class AuthService {
@@ -15,10 +16,11 @@ export class AuthService {
 
   async sendOTP(phone: string): Promise<{ message: string }> {
     const res = await this.smsService.sendOtp(phone);
+    console.log('JWT_SECRET:', process.env.JWT_SECRET);
     return { message: 'OTP sent successfully' };
   }
 
-  async signIn(phone: string, otp: string): Promise<AuthResponseDto> {
+  async signIn(phone: string, otp: string): Promise<AuthUserResponseDto> {
     const isValidOtp = await this.smsService.verifyOtp(phone, otp);
     if (!isValidOtp) {
       throw new UnauthorizedException('Invalid OTP');
@@ -28,8 +30,7 @@ export class AuthService {
     if (!user) {
       user = await this.userService.create({
         phone,
-        name: phone, // Use 'name' instead of 'username' to match Prisma schema
-        roles: [Roles.USER], // Use the Roles enum
+        roles: [Roles.USER],
       });
     }
 
@@ -39,6 +40,11 @@ export class AuthService {
     await this.userService.updateRefreshToken(user.id, refreshToken);
 
     return {
+      user: {
+        id: user.id,
+        phone: user.phone,
+        roles: user.roles,
+      },
       accessToken,
       expiresIn: 3600, // 1 hour
       refreshToken,
@@ -72,13 +78,15 @@ export class AuthService {
   }
 
   private generateAccessToken(user: any): string {
+    const secret = process.env.JWT_SECRET;
     return this.jwtService.sign(
       { id: user.id, phone: user.phone, roles: user.roles },
-      { expiresIn: '1h' },
+      { secret, expiresIn: '1h' },
     );
   }
 
   private generateRefreshToken(user: any): string {
-    return this.jwtService.sign({ id: user.id }, { expiresIn: '7d' });
+    const secret = process.env.JWT_SECRET;
+    return this.jwtService.sign({ id: user.id }, { secret, expiresIn: '7d' });
   }
 }
