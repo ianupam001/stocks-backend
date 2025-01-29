@@ -3,8 +3,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { SmsService } from './sms/sms.service';
-import { PrismaModule } from './prisma/prisma.module';
 import { SmsController } from './sms/sms.controller';
+import { PrismaService } from './prisma/prisma.service';
 import { SmsModule } from './sms/sms.module';
 
 @Module({
@@ -14,10 +14,7 @@ import { SmsModule } from './sms/sms.module';
     }),
     AuthModule,
     UsersModule,
-    PrismaModule,
     SmsModule,
   ],
-  providers: [SmsService],
-  controllers: [SmsController],
 })
 export class AppModule {}

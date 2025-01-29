@@ -17,12 +17,20 @@ export class UsersService {
   }
 
   async create(createUserDto: CreateUserDto) {
-    return this.prisma.user.create({
-      data: {
-        ...createUserDto,
-        roles: createUserDto.roles || [Roles.USER],
-      },
-    });
+    try {
+      const user = this.prisma.user.create({
+        data: {
+          ...createUserDto,
+          roles: createUserDto.roles || [Roles.USER],
+        },
+      });
+      return user;
+    } catch (error) {
+      if (error.code === 'P2002') {
+        throw new Error('User with this phone number already exists');
+      }
+      throw error;
+    }
   }
 
   async updateRefreshToken(id: string, refreshToken: string) {

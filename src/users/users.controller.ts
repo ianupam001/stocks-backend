@@ -1,5 +1,7 @@
-import { Controller, Post } from '@nestjs/common';
+import { Body, Controller, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { UsersService } from './users.service';
+import { CreateUserDto } from './dto';
 
 @ApiTags('Users')
 @ApiBearerAuth()
@@ -8,8 +10,10 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
   version: '1',
 })
 export class UsersController {
+  constructor(private readonly usersService: UsersService) {}
+
   @Post('create')
-  createUser() {
-    return `User created sucessfully`;
+  createUser(@Body() createUserDto: CreateUserDto) {
+    return this.usersService.create(createUserDto);
   }
 }
