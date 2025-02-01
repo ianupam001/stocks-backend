@@ -1,6 +1,9 @@
-import { Controller, Post } from '@nestjs/common';
+import { Body, Controller, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { SmsService } from './sms.service';
+import { Roles } from 'src/common/decorators';
+import { UserRole } from '@prisma/client';
+import { SendSmsDto } from './dto';
 
 @ApiTags('SMS')
 @ApiBearerAuth()
@@ -12,5 +15,8 @@ export class SmsController {
   constructor(private readonly smsService: SmsService) {}
 
   @Post('send-sms')
-  async sendSms() {}
+  @Roles(UserRole.ADMIN)
+  async sendSms(@Body() dto: SendSmsDto) {
+    return this.smsService.sendSms(dto.to, dto.body);
+  }
 }
