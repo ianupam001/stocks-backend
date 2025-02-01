@@ -1,6 +1,5 @@
+import { Tokens } from '../types';
+
 export class AuthResponseDto {
-  accessToken: string;
-  expiresIn: number;
-  refreshToken: string;
-  refreshExpiresIn: number;
+  tokens: Tokens;
 }

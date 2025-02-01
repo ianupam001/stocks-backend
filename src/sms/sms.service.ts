@@ -31,7 +31,6 @@ export class SmsService {
         phone,
         otp,
       );
-      console.log({ response });
       return response;
     } catch (error) {
       console.log({ error });

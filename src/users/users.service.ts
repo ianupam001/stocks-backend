@@ -1,8 +1,10 @@
 // src/users/users.service.ts
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
-import { Roles } from '@prisma/client';
+import { UserRole } from '@prisma/client';
+import { CustomForbiddenException } from 'src/common/execeptions';
+import { UpdateUserDto } from './dto';
 
 @Injectable()
 export class UsersService {
@@ -13,7 +15,11 @@ export class UsersService {
   }
 
   async findById(id: string) {
-    return this.prisma.user.findUnique({ where: { id } });
+    try {
+      return this.prisma.user.findUnique({ where: { id } });
+    } catch (error) {
+      throw new CustomForbiddenException('No user found with this user id');
+    }
   }
 
   async create(createUserDto: CreateUserDto) {
@@ -21,7 +27,7 @@ export class UsersService {
       const user = this.prisma.user.create({
         data: {
           ...createUserDto,
-          roles: createUserDto.roles || [Roles.USER],
+          roles: createUserDto.roles || [UserRole.USER],
         },
       });
       return user;
@@ -30,6 +36,27 @@ export class UsersService {
         throw new Error('User with this phone number already exists');
       }
       throw error;
+    }
+  }
+
+  async updateUserProfile(dto: UpdateUserDto, userId) {
+    try {
+      const user = await this.findById(userId);
+      if (!user) {
+        throw new NotFoundException('No user found');
+      }
+      const response = await this.prisma.user.update({
+        where: {
+          id: user.id,
+        },
+        data: {
+          ...dto,
+        },
+      });
+      return response;
+    } catch (error) {
+      console.error(error);
+      throw new CustomForbiddenException('Error while updating user');
     }
   }
 

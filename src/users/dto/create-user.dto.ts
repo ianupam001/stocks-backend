@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Roles } from '@prisma/client';
+import { UserRole } from '@prisma/client';
 import { IsOptional, IsPhoneNumber, IsString } from 'class-validator';
 
 export class CreateUserDto {
@@ -18,5 +18,5 @@ export class CreateUserDto {
   email?: string;
 
   @ApiProperty()
-  roles?: Roles[];
+  roles?: UserRole[];
 }

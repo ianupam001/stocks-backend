@@ -12,13 +12,13 @@ model User {
   email        String?  @unique
   phone        String   @unique
   name         String?
-  roles        Roles[]  @default([USER])
+  roles        UserRole[]  @default([USER])
   refreshToken String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
 
-enum Roles {
+enum UserRole {
   USER
   ADMIN
   MODERATOR

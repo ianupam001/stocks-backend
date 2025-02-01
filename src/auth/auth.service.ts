@@ -3,12 +3,15 @@ import { JwtService } from '@nestjs/jwt';
 import { SmsService } from '../sms/sms.service';
 import { UsersService } from '../users/users.service';
 import { AuthResponseDto } from './dto/auth-response.dto';
-import { Roles } from '@prisma/client';
-import { AuthUserResponseDto } from './dto';
+import { UserRole } from '@prisma/client';
+import { AuthUserResponseDto, RefreshTokenDto } from './dto';
+import { ConfigService } from '@nestjs/config';
+import { JwtPayload, Tokens } from './types';
 
 @Injectable()
 export class AuthService {
   constructor(
+    private config: ConfigService,
     private readonly smsService: SmsService,
     private readonly jwtService: JwtService,
     private readonly userService: UsersService,
@@ -16,7 +19,6 @@ export class AuthService {
 
   async sendOTP(phone: string): Promise<{ message: string }> {
     const res = await this.smsService.sendOtp(phone);
-    console.log('JWT_SECRET:', process.env.JWT_SECRET);
     return { message: 'OTP sent successfully' };
   }
 
@@ -30,14 +32,13 @@ export class AuthService {
     if (!user) {
       user = await this.userService.create({
         phone,
-        roles: [Roles.USER],
+        roles: [UserRole.USER],
       });
     }
 
-    const accessToken = this.generateAccessToken(user);
-    const refreshToken = this.generateRefreshToken(user);
+    const tokens = await this.getTokens(user.id, user.phone, user.roles);
 
-    await this.userService.updateRefreshToken(user.id, refreshToken);
+    await this.userService.updateRefreshToken(user.id, tokens.refresh_token);
 
     return {
       user: {
@@ -45,48 +46,58 @@ export class AuthService {
         phone: user.phone,
         roles: user.roles,
       },
-      accessToken,
-      expiresIn: 3600, // 1 hour
-      refreshToken,
-      refreshExpiresIn: 604800, // 7 days
+      tokens,
     };
   }
 
-  async refreshToken(refreshToken: string): Promise<AuthResponseDto> {
+  async refreshToken(dto: RefreshTokenDto): Promise<AuthResponseDto> {
     try {
-      const payload = this.jwtService.verify(refreshToken);
+      const { refreshToken } = dto;
+      console.log(refreshToken);
+      const payload = this.jwtService.verify(refreshToken, {
+        secret: this.config.get<string>('RT_SECRET'),
+      });
       const user = await this.userService.findById(payload.id);
-
       if (!user || user.refreshToken !== refreshToken) {
         throw new UnauthorizedException('Invalid refresh token');
       }
 
-      const newAccessToken = this.generateAccessToken(user);
-      const newRefreshToken = this.generateRefreshToken(user);
+      const tokens = await this.getTokens(user.id, user.phone, user.roles);
 
-      await this.userService.updateRefreshToken(user.id, newRefreshToken);
+      await this.userService.updateRefreshToken(user.id, tokens.refresh_token);
 
       return {
-        accessToken: newAccessToken,
-        expiresIn: 3600,
-        refreshToken: newRefreshToken,
-        refreshExpiresIn: 604800,
+        tokens,
       };
     } catch (error) {
       throw new UnauthorizedException('Invalid refresh token');
     }
   }
 
-  private generateAccessToken(user: any): string {
-    const secret = process.env.JWT_SECRET;
-    return this.jwtService.sign(
-      { id: user.id, phone: user.phone, roles: user.roles },
-      { secret, expiresIn: '1h' },
-    );
-  }
+  async getTokens(
+    userId: string,
+    identification: string,
+    role: UserRole[] = [UserRole.USER],
+  ): Promise<Tokens> {
+    const jwtPayload: JwtPayload = {
+      sub: userId,
+      identification: identification,
+      role: role,
+    };
+    const [at, rt] = await Promise.all([
+      this.jwtService.signAsync(jwtPayload, {
+        secret: this.config.get<string>('AT_SECRET'),
+        expiresIn: 60 * 60 * 24 * 7,
+      }),
+      this.jwtService.signAsync(jwtPayload, {
+        secret: this.config.get<string>('RT_SECRET'),
+        expiresIn: 60 * 60 * 24 * 7,
+      }),
+    ]);
 
-  private generateRefreshToken(user: any): string {
-    const secret = process.env.JWT_SECRET;
-    return this.jwtService.sign({ id: user.id }, { secret, expiresIn: '7d' });
+    return {
+      access_token: at,
+      refresh_token: rt,
+    };
   }
 }

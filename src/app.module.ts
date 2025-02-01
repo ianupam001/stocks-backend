@@ -1,11 +1,11 @@
-import { Module } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
-import { SmsService } from './sms/sms.service';
-import { SmsController } from './sms/sms.controller';
-import { PrismaService } from './prisma/prisma.service';
 import { SmsModule } from './sms/sms.module';
+import { APP_GUARD } from '@nestjs/core';
+import { AtGaurd, RolesGuard } from './common/guards';
+import { AppRequestLoggerMiddleware } from './common/middlewares';
 
 @Module({
   imports: [
@@ -16,5 +16,19 @@ import { SmsModule } from './sms/sms.module';
     UsersModule,
     SmsModule,
   ],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: AtGaurd,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: RolesGuard,
+    },
+  ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(AppRequestLoggerMiddleware).forRoutes('*path');
+  }
+}
