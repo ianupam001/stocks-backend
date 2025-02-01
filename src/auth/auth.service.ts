@@ -7,6 +7,7 @@ import { UserRole } from '@prisma/client';
 import { AuthUserResponseDto, RefreshTokenDto } from './dto';
 import { ConfigService } from '@nestjs/config';
 import { JwtPayload, Tokens } from './types';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class AuthService {
@@ -53,12 +54,17 @@ export class AuthService {
   async refreshToken(dto: RefreshTokenDto): Promise<AuthResponseDto> {
     try {
       const { refreshToken } = dto;
-      console.log(refreshToken);
       const payload = this.jwtService.verify(refreshToken, {
         secret: this.config.get<string>('RT_SECRET'),
       });
-      const user = await this.userService.findById(payload.id);
-      if (!user || user.refreshToken !== refreshToken) {
+
+      const user = await this.userService.findById(payload.sub);
+      if (!user || !user.refreshToken) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
+
+      const isMatch = await bcrypt.compare(refreshToken, user.refreshToken);
+      if (!isMatch) {
         throw new UnauthorizedException('Invalid refresh token');
       }
 
@@ -66,9 +72,7 @@ export class AuthService {
 
       await this.userService.updateRefreshToken(user.id, tokens.refresh_token);
 
-      return {
-        tokens,
-      };
+      return { tokens };
     } catch (error) {
       throw new UnauthorizedException('Invalid refresh token');
     }

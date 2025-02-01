@@ -5,6 +5,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UserRole } from '@prisma/client';
 import { CustomForbiddenException } from 'src/common/execeptions';
 import { UpdateUserDto } from './dto';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class UsersService {
@@ -61,9 +62,10 @@ export class UsersService {
   }
 
   async updateRefreshToken(id: string, refreshToken: string) {
+    const rtHash = await bcrypt.hash(refreshToken, 10);
     return this.prisma.user.update({
       where: { id },
-      data: { refreshToken },
+      data: { refreshToken: rtHash },
     });
   }
 }
