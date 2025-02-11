@@ -68,4 +68,26 @@ export class UsersService {
       data: { refreshToken: rtHash },
     });
   }
+
+  async updateTotpSecret(id: string, secret: string) {
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { id },
+      });
+      if (!user) {
+        throw new NotFoundException('No user found');
+      }
+      await this.prisma.user.update({
+        where: {
+          id: user.id,
+        },
+        data: {
+          totpSecret: secret,
+        },
+      });
+    } catch (error) {
+      console.error(error);
+      throw new CustomForbiddenException('Error while updating user');
+    }
+  }
 }

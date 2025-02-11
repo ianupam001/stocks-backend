@@ -8,6 +8,7 @@ import { AuthUserResponseDto, RefreshTokenDto } from './dto';
 import { ConfigService } from '@nestjs/config';
 import { JwtPayload, Tokens } from './types';
 import * as bcrypt from 'bcrypt';
+import * as speakeasy from 'speakeasy';
 
 @Injectable()
 export class AuthService {
@@ -35,6 +36,14 @@ export class AuthService {
         phone,
         roles: [UserRole.USER],
       });
+
+      // Generate and store TOTP secret
+      const secret = speakeasy.generateSecret({
+        length: 20,
+        name: 'Trend Reversal',
+        issuer: 'Trend Reversal',
+      });
+      await this.userService.updateTotpSecret(user.id, secret.base32);
     }
 
     const tokens = await this.getTokens(user.id, user.phone, user.roles);
@@ -49,6 +58,36 @@ export class AuthService {
       },
       tokens,
     };
+  }
+
+  async verifyTotp(userId: string, token: string): Promise<boolean> {
+    const user = await this.userService.findById(userId);
+    if (!user || !user.totpSecret) {
+      throw new UnauthorizedException('TOTP not enabled');
+    }
+
+    return speakeasy.totp.verify({
+      secret: user.totpSecret,
+      encoding: 'base32',
+      token,
+    });
+  }
+
+  async generateTotpSecret(
+    userId: string,
+  ): Promise<{ secret: string; qr: string }> {
+    const appName = 'Trend Reversal';
+    const secret = speakeasy.generateSecret({
+      length: 20,
+      name: appName,
+      issuer: appName,
+    });
+
+    await this.userService.updateTotpSecret(userId, secret.base32);
+
+    const otpAuthUrl = `otpauth://totp/${encodeURIComponent(appName)}?secret=${secret.base32}&issuer=${encodeURIComponent(appName)}`;
+
+    return { secret: secret.base32, qr: otpAuthUrl };
   }
 
   async refreshToken(dto: RefreshTokenDto): Promise<AuthResponseDto> {

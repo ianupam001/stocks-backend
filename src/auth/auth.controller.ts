@@ -1,4 +1,11 @@
-import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  HttpCode,
+  HttpStatus,
+  Post,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import {
   AuthResponseDto,
@@ -6,9 +13,10 @@ import {
   RefreshTokenDto,
   SendOtpDto,
   SignInDto,
+  TOTPVerifyDto,
 } from './dto';
 import { AuthService } from './auth.service';
-import { Public, Roles } from 'src/common/decorators';
+import { GetCurrentUserId, Public, Roles } from 'src/common/decorators';
 import { UserRole } from '@prisma/client';
 
 @ApiBearerAuth()
@@ -39,5 +47,26 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   refreshToken(@Body() dto: RefreshTokenDto): Promise<AuthResponseDto> {
     return this.authService.refreshToken(dto);
+  }
+
+  @Post('totp/generate')
+  @Roles(UserRole.USER, UserRole.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  generateTotp(@GetCurrentUserId() userId: string) {
+    return this.authService.generateTotpSecret(userId);
+  }
+
+  @Post('totp/verify')
+  @Roles(UserRole.USER, UserRole.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async verifyTotp(
+    @GetCurrentUserId() userId: string,
+    @Body() dto: TOTPVerifyDto,
+  ) {
+    const isValid = await this.authService.verifyTotp(userId, dto.token);
+    if (!isValid) {
+      throw new UnauthorizedException('Invalid TOTP token');
+    }
+    return { message: 'TOTP verified successfully' };
   }
 }
