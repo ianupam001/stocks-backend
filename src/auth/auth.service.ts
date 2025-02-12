@@ -1,14 +1,23 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { SmsService } from '../sms/sms.service';
 import { UsersService } from '../users/users.service';
 import { AuthResponseDto } from './dto/auth-response.dto';
 import { UserRole } from '@prisma/client';
-import { AuthUserResponseDto, RefreshTokenDto } from './dto';
+import {
+  AuthUserResponseDto,
+  AuthUserResponseWithTotp,
+  RefreshTokenDto,
+} from './dto';
 import { ConfigService } from '@nestjs/config';
 import { JwtPayload, Tokens } from './types';
 import * as bcrypt from 'bcrypt';
 import * as speakeasy from 'speakeasy';
+import { Request } from 'express';
 
 @Injectable()
 export class AuthService {
@@ -20,35 +29,64 @@ export class AuthService {
   ) {}
 
   async sendOTP(phone: string): Promise<{ message: string }> {
-    const res = await this.smsService.sendOtp(phone);
+    const user = await this.userService.findByPhone(phone);
+
+    if (user && user.isTwoFAEnabled) {
+      throw new UnauthorizedException(
+        'TOTP is enabled. Please use authenticator.',
+      );
+    }
+    await this.smsService.sendOtp(phone);
     return { message: 'OTP sent successfully' };
   }
 
-  async signIn(phone: string, otp: string): Promise<AuthUserResponseDto> {
+  async signIn(
+    phone: string,
+    otp?: string,
+    req?: Request,
+  ): Promise<AuthUserResponseWithTotp | AuthUserResponseDto> {
+    const user = await this.userService.findByPhone(phone);
+    if (!user) {
+      throw new UnauthorizedException('User not found.');
+    }
+
+    if (!req) {
+      throw new NotFoundException('No IP is found in request');
+    }
+    
+    const clientIp = req.ip;
+
+    if (!clientIp) {
+      throw new NotFoundException('Client Ip is required');
+    }
+    const existingSession = await this.userService.findByIp(clientIp);
+
+    if (existingSession && existingSession.id !== user.id) {
+      throw new UnauthorizedException('This IP address is already in use.');
+    }
+
+    if (user.isTwoFAEnabled) {
+      return { requiresTotp: true };
+    }
+
+    if (!otp) {
+      throw new UnauthorizedException('OTP is required for login.');
+    }
+
     const isValidOtp = await this.smsService.verifyOtp(phone, otp);
     if (!isValidOtp) {
       throw new UnauthorizedException('Invalid OTP');
     }
 
-    let user = await this.userService.findByPhone(phone);
-    if (!user) {
-      user = await this.userService.create({
-        phone,
-        roles: [UserRole.USER],
-      });
-
-      // Generate and store TOTP secret
-      const secret = speakeasy.generateSecret({
-        length: 20,
-        name: 'Trend Reversal',
-        issuer: 'Trend Reversal',
-      });
-      await this.userService.updateTotpSecret(user.id, secret.base32);
-    }
-
+    // Generate tokens and update session info
     const tokens = await this.getTokens(user.id, user.phone, user.roles);
-
     await this.userService.updateRefreshToken(user.id, tokens.refresh_token);
+
+    await this.userService.updateSession(
+      user.id,
+      clientIp,
+      tokens.access_token,
+    );
 
     return {
       user: {
@@ -60,17 +98,36 @@ export class AuthService {
     };
   }
 
-  async verifyTotp(userId: string, token: string): Promise<boolean> {
+  async verifyTotp(
+    userId: string,
+    token: string,
+  ): Promise<AuthUserResponseDto> {
     const user = await this.userService.findById(userId);
     if (!user || !user.totpSecret) {
       throw new UnauthorizedException('TOTP not enabled');
     }
 
-    return speakeasy.totp.verify({
+    const isValid = speakeasy.totp.verify({
       secret: user.totpSecret,
       encoding: 'base32',
       token,
     });
+
+    if (!isValid) {
+      throw new UnauthorizedException('Invalid TOTP token');
+    }
+
+    const tokens = await this.getTokens(user.id, user.phone, user.roles);
+    await this.userService.updateRefreshToken(user.id, tokens.refresh_token);
+
+    return {
+      user: {
+        id: user.id,
+        phone: user.phone,
+        roles: user.roles,
+      },
+      tokens,
+    };
   }
 
   async generateTotpSecret(
@@ -84,6 +141,7 @@ export class AuthService {
     });
 
     await this.userService.updateTotpSecret(userId, secret.base32);
+    await this.userService.enableTwoFA(userId); // Mark user as TOTP-enabled
 
     const otpAuthUrl = `otpauth://totp/${encodeURIComponent(appName)}?secret=${secret.base32}&issuer=${encodeURIComponent(appName)}`;
 
@@ -108,7 +166,6 @@ export class AuthService {
       }
 
       const tokens = await this.getTokens(user.id, user.phone, user.roles);
-
       await this.userService.updateRefreshToken(user.id, tokens.refresh_token);
 
       return { tokens };
@@ -130,11 +187,11 @@ export class AuthService {
     const [at, rt] = await Promise.all([
       this.jwtService.signAsync(jwtPayload, {
         secret: this.config.get<string>('AT_SECRET'),
-        expiresIn: 60 * 60 * 24 * 7,
+        expiresIn: '7d',
       }),
       this.jwtService.signAsync(jwtPayload, {
         secret: this.config.get<string>('RT_SECRET'),
-        expiresIn: 60 * 60 * 24 * 7,
+        expiresIn: '7d',
       }),
     ]);
 

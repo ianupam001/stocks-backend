@@ -2,7 +2,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
-import { UserRole } from '@prisma/client';
+import { User, UserRole } from '@prisma/client';
 import { CustomForbiddenException } from 'src/common/execeptions';
 import { UpdateUserDto } from './dto';
 import * as bcrypt from 'bcrypt';
@@ -40,7 +40,7 @@ export class UsersService {
     }
   }
 
-  async updateUserProfile(dto: UpdateUserDto, userId) {
+  async updateUserProfile(dto: UpdateUserDto, userId: string) {
     try {
       const user = await this.findById(userId);
       if (!user) {
@@ -89,5 +89,23 @@ export class UsersService {
       console.error(error);
       throw new CustomForbiddenException('Error while updating user');
     }
+  }
+
+  async enableTwoFA(userId: string): Promise<User> {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { isTwoFAEnabled: true },
+    });
+  }
+
+  async findByIp(ip: string) {
+    return this.prisma.user.findFirst({ where: { currentIp: ip } });
+  }
+
+  async updateSession(userId: string, ip: string, sessionId: string) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { currentIp: ip, currentSessionId: sessionId },
+    });
   }
 }

@@ -8,8 +8,8 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import {
-  AuthResponseDto,
   AuthUserResponseDto,
+  AuthUserResponseWithTotp,
   RefreshTokenDto,
   SendOtpDto,
   SignInDto,
@@ -38,14 +38,16 @@ export class AuthController {
   @Public()
   @HttpCode(HttpStatus.OK)
   @Post('sign-in')
-  signIn(@Body() dto: SignInDto): Promise<AuthUserResponseDto> {
+  async signIn(
+    @Body() dto: SignInDto,
+  ): Promise<AuthUserResponseWithTotp | AuthUserResponseDto> {
     return this.authService.signIn(dto.phone, dto.otp);
   }
 
   @Post('refresh-token')
   @Roles(UserRole.ADMIN, UserRole.USER)
   @HttpCode(HttpStatus.OK)
-  refreshToken(@Body() dto: RefreshTokenDto): Promise<AuthResponseDto> {
+  refreshToken(@Body() dto: RefreshTokenDto) {
     return this.authService.refreshToken(dto);
   }
 
@@ -62,11 +64,7 @@ export class AuthController {
   async verifyTotp(
     @GetCurrentUserId() userId: string,
     @Body() dto: TOTPVerifyDto,
-  ) {
-    const isValid = await this.authService.verifyTotp(userId, dto.token);
-    if (!isValid) {
-      throw new UnauthorizedException('Invalid TOTP token');
-    }
-    return { message: 'TOTP verified successfully' };
+  ): Promise<AuthUserResponseDto> {
+    return this.authService.verifyTotp(userId, dto.token);
   }
 }
