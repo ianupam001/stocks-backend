@@ -3,6 +3,7 @@ import {
   Controller,
   HttpCode,
   HttpStatus,
+  Param,
   Post,
   Query,
   UnauthorizedException,
@@ -52,18 +53,20 @@ export class AuthController {
     return this.authService.refreshToken(dto);
   }
 
-  @Post('totp/generate')
+  @Public()
+  @Post('totp/generate/:userId')
   @Roles(UserRole.USER, UserRole.ADMIN)
   @HttpCode(HttpStatus.OK)
-  generateTotp(@Query() userId: string) {
+  generateTotp(@Param('userId') userId: string) {
     return this.authService.generateTotpSecret(userId);
   }
 
-  @Post('totp/verify')
+  @Public()
+  @Post('totp/verify/:userId')
   @Roles(UserRole.USER, UserRole.ADMIN)
   @HttpCode(HttpStatus.OK)
   async verifyTotp(
-    @Query() userId: string,
+    @Param('userId') userId: string,
     @Body() dto: TOTPVerifyDto,
   ): Promise<AuthUserResponseDto> {
     return this.authService.verifyTotp(userId, dto.token);

@@ -18,6 +18,7 @@ import { JwtPayload, Tokens } from './types';
 import * as bcrypt from 'bcrypt';
 import * as speakeasy from 'speakeasy';
 import { Request } from 'express';
+import { PrismaService } from 'src/prisma/prisma.service';
 
 @Injectable()
 export class AuthService {
@@ -26,6 +27,7 @@ export class AuthService {
     private readonly smsService: SmsService,
     private readonly jwtService: JwtService,
     private readonly userService: UsersService,
+    private readonly prisma: PrismaService,
   ) {}
 
   async sendOTP(phone: string): Promise<{ message: string }> {
@@ -36,6 +38,11 @@ export class AuthService {
         'TOTP is enabled. Please use authenticator.',
       );
     }
+    await this.prisma.user.create({
+      data: {
+        phone: phone,
+      },
+    });
     await this.smsService.sendOtp(phone);
     return { message: 'OTP sent successfully' };
   }
@@ -50,20 +57,20 @@ export class AuthService {
       throw new UnauthorizedException('User not found.');
     }
 
-    if (!req) {
-      throw new NotFoundException('No IP is found in request');
-    }
-    
-    const clientIp = req.ip;
+    // if (!req) {
+    //   throw new NotFoundException('No IP is found in request');
+    // }
 
-    if (!clientIp) {
-      throw new NotFoundException('Client Ip is required');
-    }
-    const existingSession = await this.userService.findByIp(clientIp);
+    // const clientIp = req.ip;
 
-    if (existingSession && existingSession.id !== user.id) {
-      throw new UnauthorizedException('This IP address is already in use.');
-    }
+    // if (!clientIp) {
+    //   throw new NotFoundException('Client Ip is required');
+    // }
+    // const existingSession = await this.userService.findByIp(clientIp);
+
+    // if (existingSession && existingSession.id !== user.id) {
+    //   throw new UnauthorizedException('This IP address is already in use.');
+    // }
 
     if (user.isTwoFAEnabled) {
       return { requiresTotp: true, userId: user.id };
@@ -82,11 +89,11 @@ export class AuthService {
     const tokens = await this.getTokens(user.id, user.phone, user.roles);
     await this.userService.updateRefreshToken(user.id, tokens.refresh_token);
 
-    await this.userService.updateSession(
-      user.id,
-      clientIp,
-      tokens.access_token,
-    );
+    // await this.userService.updateSession(
+    //   user.id,
+    //   clientIp,
+    //   tokens.access_token,
+    // );
 
     return {
       user: {
