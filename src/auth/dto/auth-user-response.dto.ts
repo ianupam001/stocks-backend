@@ -12,4 +12,5 @@ export class AuthUserResponseDto {
 
 export class AuthUserResponseWithTotp {
   requiresTotp: boolean;
+  userId: string;
 }

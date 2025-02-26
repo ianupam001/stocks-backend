@@ -4,6 +4,7 @@ import {
   HttpCode,
   HttpStatus,
   Post,
+  Query,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
@@ -54,7 +55,7 @@ export class AuthController {
   @Post('totp/generate')
   @Roles(UserRole.USER, UserRole.ADMIN)
   @HttpCode(HttpStatus.OK)
-  generateTotp(@GetCurrentUserId() userId: string) {
+  generateTotp(@Query() userId: string) {
     return this.authService.generateTotpSecret(userId);
   }
 
@@ -62,7 +63,7 @@ export class AuthController {
   @Roles(UserRole.USER, UserRole.ADMIN)
   @HttpCode(HttpStatus.OK)
   async verifyTotp(
-    @GetCurrentUserId() userId: string,
+    @Query() userId: string,
     @Body() dto: TOTPVerifyDto,
   ): Promise<AuthUserResponseDto> {
     return this.authService.verifyTotp(userId, dto.token);

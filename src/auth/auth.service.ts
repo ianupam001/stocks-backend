@@ -66,7 +66,7 @@ export class AuthService {
     }
 
     if (user.isTwoFAEnabled) {
-      return { requiresTotp: true };
+      return { requiresTotp: true, userId: user.id };
     }
 
     if (!otp) {
