@@ -30,13 +30,19 @@ export class AuthService {
     private readonly prisma: PrismaService,
   ) {}
 
-  async sendOTP(phone: string): Promise<{ message: string }> {
+  async sendOTP(
+    phone: string,
+  ): Promise<{
+    message: string;
+    data?: { requiresTotp: boolean; userId: string };
+  }> {
     const user = await this.userService.findByPhone(phone);
 
     if (user && user.isTwoFAEnabled) {
-      throw new UnauthorizedException(
-        'TOTP is enabled. Please use authenticator.',
-      );
+      return {
+        message: 'User already exists and 2FA is enabled',
+        data: { requiresTotp: true, userId: user.id },
+      };
     }
     await this.prisma.user.create({
       data: {
@@ -57,20 +63,20 @@ export class AuthService {
       throw new UnauthorizedException('User not found.');
     }
 
-    // if (!req) {
-    //   throw new NotFoundException('No IP is found in request');
-    // }
+    if (!req) {
+      throw new NotFoundException('No IP is found in request');
+    }
 
-    // const clientIp = req.ip;
+    const clientIp = req.ip;
 
-    // if (!clientIp) {
-    //   throw new NotFoundException('Client Ip is required');
-    // }
-    // const existingSession = await this.userService.findByIp(clientIp);
+    if (!clientIp) {
+      throw new NotFoundException('Client Ip is required');
+    }
+    const existingSession = await this.userService.findByIp(clientIp);
 
-    // if (existingSession && existingSession.id !== user.id) {
-    //   throw new UnauthorizedException('This IP address is already in use.');
-    // }
+    if (existingSession && existingSession.id !== user.id) {
+      throw new UnauthorizedException('This IP address is already in use.');
+    }
 
     if (user.isTwoFAEnabled) {
       return { requiresTotp: true, userId: user.id };
@@ -89,11 +95,11 @@ export class AuthService {
     const tokens = await this.getTokens(user.id, user.phone, user.roles);
     await this.userService.updateRefreshToken(user.id, tokens.refresh_token);
 
-    // await this.userService.updateSession(
-    //   user.id,
-    //   clientIp,
-    //   tokens.access_token,
-    // );
+    await this.userService.updateSession(
+      user.id,
+      clientIp,
+      tokens.access_token,
+    );
 
     return {
       user: {
