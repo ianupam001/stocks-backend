@@ -35,6 +35,14 @@ export class AuthService {
     data?: { requiresTotp: boolean; userId: string };
   }> {
     const user = await this.userService.findByPhone(phone);
+    
+    if (user && !user.isTwoFAEnabled) {
+      await this.prisma.user.delete({
+        where: {
+          id: user.id,
+        },
+      });
+    }
 
     if (user && user.isTwoFAEnabled) {
       return {
