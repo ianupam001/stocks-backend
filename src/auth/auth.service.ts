@@ -30,9 +30,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
   ) {}
 
-  async sendOTP(
-    phone: string,
-  ): Promise<{
+  async sendOTP(phone: string): Promise<{
     message: string;
     data?: { requiresTotp: boolean; userId: string };
   }> {
@@ -204,7 +202,7 @@ export class AuthService {
       }),
       this.jwtService.signAsync(jwtPayload, {
         secret: this.config.get<string>('RT_SECRET'),
-        expiresIn: '7d',
+        expiresIn: '30d',
       }),
     ]);
 
