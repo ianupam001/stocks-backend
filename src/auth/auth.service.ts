@@ -1,5 +1,7 @@
 import {
+  BadRequestException,
   Injectable,
+  InternalServerErrorException,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -34,35 +36,39 @@ export class AuthService {
     message: string;
     data?: { requiresTotp: boolean; userId: string };
   }> {
-    const user = await this.userService.findByPhone(phone);
-    
-    if (user && !user.isTwoFAEnabled) {
-      await this.prisma.user.delete({
-        where: {
-          id: user.id,
-        },
-      });
+    let user = await this.userService.findByPhone(phone);
+    console.log('user', user);
+    if (user) {
+      if (user.isTwoFAEnabled) {
+        return {
+          message: 'User already exists and 2FA is enabled',
+          data: { requiresTotp: true, userId: user.id },
+        };
+      }
+
+      await this.smsService.sendOtp(phone);
+      return { message: 'OTP sent successfully' };
     }
 
-    if (user && user.isTwoFAEnabled) {
-      return {
-        message: 'User already exists and 2FA is enabled',
-        data: { requiresTotp: true, userId: user.id },
-      };
+    try {
+      user = await this.prisma.user.create({
+        data: { phone },
+      });
+
+      await this.smsService.sendOtp(phone);
+      return { message: 'OTP sent successfully' };
+    } catch (error) {
+      if (error.code === 'P2002') {
+        throw new BadRequestException('Phone number is already in use.');
+      }
+      throw new InternalServerErrorException('Could not create user.');
     }
-    await this.prisma.user.create({
-      data: {
-        phone: phone,
-      },
-    });
-    await this.smsService.sendOtp(phone);
-    return { message: 'OTP sent successfully' };
   }
 
   async signIn(
     phone: string,
+    req: Request,
     otp?: string,
-    req?: Request,
   ): Promise<AuthUserResponseWithTotp | AuthUserResponseDto> {
     const user = await this.userService.findByPhone(phone);
     if (!user) {
@@ -106,13 +112,9 @@ export class AuthService {
       clientIp,
       tokens.access_token,
     );
-
     return {
-      user: {
-        id: user.id,
-        phone: user.phone,
-        roles: user.roles,
-      },
+      message: 'User logged in successfully',
+      user,
       tokens,
     };
   }
@@ -140,11 +142,8 @@ export class AuthService {
     await this.userService.updateRefreshToken(user.id, tokens.refresh_token);
 
     return {
-      user: {
-        id: user.id,
-        phone: user.phone,
-        roles: user.roles,
-      },
+      message: 'User logged in successfully',
+      user,
       tokens,
     };
   }
@@ -193,6 +192,25 @@ export class AuthService {
     }
   }
 
+  async logout(userId: string): Promise<{ message: string }> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+
+    if (!user) {
+      throw new UnauthorizedException('User not found.');
+    }
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        refreshToken: null,
+        currentIp: null,
+        currentSessionId: null,
+      },
+    });
+
+    return { message: 'Logged out successfully' };
+  }
+  // hepler functions
   async getTokens(
     userId: string,
     identification: string,

@@ -6,6 +6,7 @@ import {
   Param,
   Post,
   Query,
+  Req,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
@@ -20,6 +21,7 @@ import {
 import { AuthService } from './auth.service';
 import { GetCurrentUserId, Public, Roles } from 'src/common/decorators';
 import { UserRole } from '@prisma/client';
+import { Request } from 'express';
 
 @ApiBearerAuth()
 @ApiTags('Auth')
@@ -42,8 +44,9 @@ export class AuthController {
   @Post('sign-in')
   async signIn(
     @Body() dto: SignInDto,
+    @Req() req: Request,
   ): Promise<AuthUserResponseWithTotp | AuthUserResponseDto> {
-    return this.authService.signIn(dto.phone, dto.otp);
+    return this.authService.signIn(dto.phone, req, dto.otp);
   }
 
   @Post('refresh-token')
@@ -71,4 +74,12 @@ export class AuthController {
   ): Promise<AuthUserResponseDto> {
     return this.authService.verifyTotp(userId, dto.token);
   }
+
+  @Post('logout')
+  @Roles(UserRole.ADMIN, UserRole.USER)
+  @HttpCode(HttpStatus.OK)
+  logout(@GetCurrentUserId() userId: string) {
+    return this.authService.logout(userId);
+  }
+  
 }

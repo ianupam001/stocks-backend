@@ -12,7 +12,9 @@ export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findByPhone(phone: string) {
-    return this.prisma.user.findUnique({ where: { phone } });
+    return this.prisma.user.findUnique({
+      where: { phone },
+    });
   }
 
   async findById(id: string) {

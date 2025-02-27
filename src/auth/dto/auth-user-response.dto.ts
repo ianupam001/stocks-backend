@@ -1,13 +1,10 @@
-import { UserRole } from '@prisma/client';
+import { User, UserRole } from '@prisma/client';
 import { Tokens } from '../types';
 
 export class AuthUserResponseDto {
-  user: {
-    id: string;
-    phone: string;
-    roles: UserRole[];
-  };
+  user: User;
   tokens: Tokens;
+  message: string;
 }
 
 export class AuthUserResponseWithTotp {
