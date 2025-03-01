@@ -38,6 +38,60 @@ model StockData {
   updatedAt    DateTime @updatedAt
 }
 
+model StockMetadata {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  FINCODE        String?
+  SCRIPCODE      String   @unique
+  SCRIP_NAME     String
+  SCRIP_GROUP    String?
+  COMPNAME       String
+  IND_CODE       String?
+  industry       String?
+  HSE_CODE       String?
+  house          String?
+  SYMBOL         String
+  SERIES         String?
+  ISIN           String?
+  S_NAME         String?
+  RFORMAT        String?
+  FFORMAT        String?
+  CHAIRMAN       String?
+  MDIR           String?
+  COSEC          String?
+  INC_MONTH      String?
+  INC_YEAR       String?
+  FV             String?
+  Status         String?
+  Sublisting     String?
+  Bse_Scrip_ID   String?
+  securitytoken  String?
+  CIN            String?
+  Bse_sublisting String?
+  Nse_sublisting String?
+  FLAG           String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+}
+
+model RealTimeStockData {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  FINCODE    String?
+  SCRIPCODE  String   @unique
+  OPEN       Float?
+  CLOSE      Float?
+  HIGH       Float?
+  LOW        Float?
+  BIDPRICE   Float?
+  OFFERPRICE Float?
+  BIDQTY     Int?
+  OFFERQTY   Int?
+  VOLUME     Int?
+  VALUE      Float?
+  UPDTIME    DateTime
+  createdAt  DateTime @default(now())
+}
+
 enum UserRole {
   USER
   ADMIN

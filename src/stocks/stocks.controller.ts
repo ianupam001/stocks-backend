@@ -8,10 +8,14 @@ import {
   HttpCode,
 } from '@nestjs/common';
 import { StocksService } from './stocks.service';
-import { StockDataDto } from './dto';
-import { Roles } from 'src/common/decorators';
+import {
+  CreateRealTimeStockDataDto,
+  CreateStockMetadataDto,
+  StockDataDto,
+} from './dto';
+import { Public, Roles } from 'src/common/decorators';
 import { UserRole } from '@prisma/client';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 @ApiTags('Stocks')
 @ApiBearerAuth()
@@ -41,5 +45,30 @@ export class StocksController {
   @HttpCode(HttpStatus.OK)
   getIndicators(@Param('ticker') ticker: string) {
     return this.stocksService.calculateIndicators(ticker);
+  }
+
+  @Post('metadata')
+  @ApiOperation({ summary: 'Create Stock Metadata' })
+  createStockMetadata(@Body() createStockMetadataDto: CreateStockMetadataDto) {
+    return this.stocksService.createMetadata(createStockMetadataDto);
+  }
+
+  @Post('real-time')
+  @ApiOperation({ summary: 'Create Real-Time Stock Data' })
+  createRealTimeStockData(
+    @Body() createRealTimeStockDataDto: CreateRealTimeStockDataDto,
+  ) {
+    return this.stocksService.createRealTimeData(createRealTimeStockDataDto);
+  }
+  @Public()
+  @Get('fetch-metadata')
+  async fetchMetadata() {
+    return this.stocksService.fetchAndSaveStockMetadata();
+  }
+
+  @Public()
+  @Get('fetch-real-time-data')
+  async fetchRealTimeData() {
+    return this.stocksService.fetchAndSaveRealTimeData();
   }
 }
