@@ -32,6 +32,36 @@ export class AuthService {
     private readonly prisma: PrismaService,
   ) {}
 
+  async adminLogin(email: string, password: string) {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+
+    if (!user || !user.roles.includes(UserRole.ADMIN)) {
+      throw new UnauthorizedException('Only admins can log in.');
+    }
+
+    if (!user.password) {
+      throw new UnauthorizedException('User password is missing.');
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Invalid credentials.');
+    }
+
+    if (!user.email) {
+      throw new UnauthorizedException('User email is missing.');
+    }
+
+    const tokens = await this.getTokens(user.id, user.email, user.roles);
+    await this.userService.updateRefreshToken(user.id, tokens.refresh_token);
+
+    return {
+      message: 'Admin logged in successfully',
+      user,
+      tokens,
+    };
+  }
+
   async sendOTP(phone: string): Promise<{
     message: string;
     data?: { requiresTotp: boolean; userId: string };
@@ -106,7 +136,12 @@ export class AuthService {
     // Generate tokens and update session info
     const tokens = await this.getTokens(user.id, user.phone, user.roles);
     await this.userService.updateRefreshToken(user.id, tokens.refresh_token);
-
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        isActive: true,
+      },
+    });
     await this.userService.updateSession(
       user.id,
       clientIp,
@@ -122,10 +157,26 @@ export class AuthService {
   async verifyTotp(
     userId: string,
     token: string,
+    req: Request,
   ): Promise<AuthUserResponseDto> {
-    const user = await this.userService.findById(userId);
+    let user = await this.userService.findById(userId);
     if (!user || !user.totpSecret) {
       throw new UnauthorizedException('TOTP not enabled');
+    }
+
+    if (!req) {
+      throw new NotFoundException('No IP is found in request');
+    }
+
+    const clientIp = req.ip;
+
+    if (!clientIp) {
+      throw new NotFoundException('Client Ip is required');
+    }
+    const existingSession = await this.userService.findByIp(clientIp);
+
+    if (existingSession && existingSession.id !== user.id) {
+      throw new UnauthorizedException('This IP address is already in use.');
     }
 
     const isValid = speakeasy.totp.verify({
@@ -139,6 +190,11 @@ export class AuthService {
     }
 
     const tokens = await this.getTokens(user.id, user.phone, user.roles);
+    user = await this.userService.updateSession(
+      user.id,
+      clientIp,
+      tokens.access_token,
+    );
     await this.userService.updateRefreshToken(user.id, tokens.refresh_token);
 
     return {

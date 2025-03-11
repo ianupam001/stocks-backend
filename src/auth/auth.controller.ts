@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import {
+  AdminSignDto,
   AuthUserResponseDto,
   AuthUserResponseWithTotp,
   RefreshTokenDto,
@@ -31,6 +32,13 @@ import { Request } from 'express';
 })
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
+
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  @Post('admin-sign-in')
+  async adminLogin(@Body() dto: AdminSignDto) {
+    return this.authService.adminLogin(dto.email, dto.password);
+  }
 
   @Public()
   @HttpCode(HttpStatus.OK)
@@ -71,8 +79,9 @@ export class AuthController {
   async verifyTotp(
     @Param('userId') userId: string,
     @Body() dto: TOTPVerifyDto,
+    @Req() req: Request,
   ): Promise<AuthUserResponseDto> {
-    return this.authService.verifyTotp(userId, dto.token);
+    return this.authService.verifyTotp(userId, dto.token, req);
   }
 
   @Post('logout')
@@ -81,5 +90,4 @@ export class AuthController {
   logout(@GetCurrentUserId() userId: string) {
     return this.authService.logout(userId);
   }
-  
 }

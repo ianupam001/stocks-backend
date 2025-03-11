@@ -1,7 +1,7 @@
-import { Body, Controller, Get, Patch, Post } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { UsersService } from './users.service';
-import { CreateUserDto, UpdateUserDto } from './dto';
+import { CreateUserDto, FeatureRequestDto, UpdateUserDto } from './dto';
 import { GetCurrentUserId, Roles } from 'src/common/decorators';
 import { UserRole } from '@prisma/client';
 
@@ -14,6 +14,11 @@ import { UserRole } from '@prisma/client';
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
+  @Get()
+  @Roles(UserRole.ADMIN)
+  getAllUsers() {
+    return this.usersService.findAll();
+  }
   @Post('create')
   @Roles(UserRole.ADMIN)
   createUser(@Body() createUserDto: CreateUserDto) {
@@ -33,5 +38,37 @@ export class UsersController {
     @GetCurrentUserId() userId: string,
   ) {
     return this.usersService.updateUserProfile(dto, userId);
+  }
+
+  @Post('request-feature')
+  @Roles(UserRole.ADMIN, UserRole.USER)
+  requestFeature(
+    @GetCurrentUserId() userId: string,
+    @Body() dto: FeatureRequestDto,
+  ) {
+    return this.usersService.requestFeature(userId, dto);
+  }
+
+  @Get('requested-features')
+  @Roles(UserRole.USER)
+  getFeatures(@GetCurrentUserId() userId: string) {
+    return this.usersService.getRequestedFeatures(userId);
+  }
+
+  @Get('features')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'For admin' })
+  getAllFeatures() {
+    return this.usersService.getAllFeatures();
+  }
+
+  @Get('feature/:featureId')
+  @ApiOperation({ summary: 'For admin' })
+  @Roles(UserRole.ADMIN)
+  getFeature(
+    @GetCurrentUserId() userId: string,
+    @Param('featureId') featureId: string,
+  ) {
+    return this.usersService.getFeatureById(userId, featureId);
   }
 }

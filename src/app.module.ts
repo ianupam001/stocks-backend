@@ -8,6 +8,7 @@ import { AtGaurd, RolesGuard } from './common/guards';
 import { AppRequestLoggerMiddleware } from './common/middlewares';
 import { StocksModule } from './stocks/stocks.module';
 import { SchedulerModule } from './scheduler/scheduler.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { SchedulerModule } from './scheduler/scheduler.module';
     SmsModule,
     StocksModule,
     SchedulerModule,
+    DashboardModule,
   ],
   providers: [
     {
