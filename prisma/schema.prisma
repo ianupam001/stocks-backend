@@ -97,10 +97,8 @@ model RealTimeStockData {
   createdAt  DateTime @default(now())
 
   // Relation to StockMetadata
-  stockMetadata StockMetadata @relation(fields: [SCRIPCODE], references: [SCRIPCODE])
+  stockMetadata StockMetadata? @relation(fields: [SCRIPCODE], references: [SCRIPCODE])
 }
-
-
 
 model FeatureRequest {
   id          String               @id @default(auto()) @map("_id") @db.ObjectId

@@ -57,8 +57,8 @@ export class AuthController {
     return this.authService.signIn(dto.phone, req, dto.otp);
   }
 
+  @Public()
   @Post('refresh-token')
-  @Roles(UserRole.ADMIN, UserRole.USER)
   @HttpCode(HttpStatus.OK)
   refreshToken(@Body() dto: RefreshTokenDto) {
     return this.authService.refreshToken(dto);

@@ -4,11 +4,31 @@ import { StockDataDto } from './dto/stock-data.dto';
 import { CreateRealTimeStockDataDto, CreateStockMetadataDto } from './dto';
 import { CustomForbiddenException } from 'src/common/execeptions';
 import axios from 'axios';
+import { ConfigService } from '@nestjs/config';
+import {
+  WebSocketGateway,
+  WebSocketServer,
+  OnGatewayInit,
+} from '@nestjs/websockets';
+import { Server } from 'socket.io';
+import { StocksGateway } from './gateway/stocks.gateway';
+import { Interval } from '@nestjs/schedule';
 
 @Injectable()
-export class StocksService {
+export class StocksService implements OnGatewayInit {
+  @WebSocketServer() server: Server;
+
+  private metadataApiUrl: string;
+  private realTimeApiUrl: string;
   private readonly logger = new Logger(StocksService.name);
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private config: ConfigService,
+    private stocksGateway: StocksGateway,
+  ) {
+    this.metadataApiUrl = `${this.config.get<string>('STOCK_METADATA_API_URL')}&token=${this.config.get<string>('API_TOKEN')}`;
+    this.realTimeApiUrl = `${this.config.get<string>('STOCK_REALTIME_API_URL')}&token=${this.config.get<string>('API_TOKEN')}`;
+  }
 
   async saveStockData(stockDto: StockDataDto) {
     return this.prisma.stockData.create({
@@ -136,95 +156,47 @@ export class StocksService {
 
   async fetchAndSaveStockMetadata() {
     try {
-      const url =
-        'https://contentapi.accordwebservices.com/RawData/GetRawDataJSON?filename=Company_master&date=30092022&section=Master&sub=&token=fMqHkvwLKoN6rTyt_j7F3HNgnvhBtWWE';
+      const url = this.metadataApiUrl;
+      if (!url) {
+        throw new Error('STOCK_API_URL is not defined.');
+      }
 
-      // Fetch data from API
       const response = await axios.get(url);
-
-      // Extract the 'Table' array
       const stockMetadataArray: CreateStockMetadataDto[] = response.data.Table;
 
       if (!Array.isArray(stockMetadataArray)) {
         throw new CustomForbiddenException('Invalid API response format.');
       }
 
-      console.log(`Fetched ${stockMetadataArray.length} stock records`);
-
       for (const stockMetadata of stockMetadataArray) {
-        const existingRecord = await this.prisma.stockMetadata.findUnique({
+        await this.prisma.stockMetadata.upsert({
           where: { SCRIPCODE: stockMetadata.SCRIPCODE },
+          update: stockMetadata,
+          create: stockMetadata,
         });
-
-        if (!existingRecord) {
-          await this.prisma.stockMetadata.create({
-            data: {
-              FINCODE: stockMetadata.FINCODE,
-              SCRIPCODE: stockMetadata.SCRIPCODE,
-              SCRIP_NAME: stockMetadata.SCRIP_NAME,
-              SCRIP_GROUP: stockMetadata.SCRIP_GROUP,
-              COMPNAME: stockMetadata.COMPNAME,
-              IND_CODE: stockMetadata.IND_CODE,
-              industry: stockMetadata.industry,
-              HSE_CODE: stockMetadata.HSE_CODE,
-              house: stockMetadata.house,
-              SYMBOL: stockMetadata.SYMBOL,
-              SERIES: stockMetadata.SERIES,
-              ISIN: stockMetadata.ISIN,
-              S_NAME: stockMetadata.S_NAME,
-              RFORMAT: stockMetadata.RFORMAT,
-              FFORMAT: stockMetadata.FFORMAT,
-              CHAIRMAN: stockMetadata.CHAIRMAN,
-              MDIR: stockMetadata.MDIR,
-              COSEC: stockMetadata.COSEC,
-              INC_MONTH: stockMetadata.INC_MONTH,
-              INC_YEAR: stockMetadata.INC_YEAR,
-              FV: stockMetadata.FV,
-              Status: stockMetadata.Status,
-              Sublisting: stockMetadata.Sublisting,
-              Bse_Scrip_ID: stockMetadata.Bse_Scrip_ID,
-              securitytoken: stockMetadata.securitytoken,
-              CIN: stockMetadata.CIN,
-              Bse_sublisting: stockMetadata.Bse_sublisting,
-              Nse_sublisting: stockMetadata.Nse_sublisting,
-              FLAG: stockMetadata.FLAG,
-              createdAt: new Date(),
-              updatedAt: new Date(),
-            },
-          });
-        } else {
-          this.logger.warn(
-            `Stock metadata already exists for SCRIPCODE: ${stockMetadata.SCRIPCODE}`,
-          );
-        }
       }
 
-      return stockMetadataArray; // Return only after processing
+      return stockMetadataArray;
     } catch (error) {
       console.error('Error fetching and saving stock metadata:', error);
-      throw error;
+      throw new CustomForbiddenException(error.message);
     }
   }
 
-  async fetchAndSaveRealTimeData() {
+  @Interval(10000)
+  async fetchAndStreamRealTimeData() {
     try {
-      const url =
-        'https://contentapi.accordwebservices.com/RawData/GetRawDataJSON?filename=2022093003&date=30092022&section=BseStocksLive&sub=&token=fMqHkvwLKoN6rTyt_j7F3HNgnvhBtWWE';
+      const url = this.realTimeApiUrl;
+      if (!url) throw new Error('STOCK_REALTIME_API_URL is not defined.');
 
-      // Fetch data from API
       const response = await axios.get(url);
       const realTimeDataArray = response.data.Table;
 
       if (!Array.isArray(realTimeDataArray)) {
-        throw new CustomForbiddenException('Invalid API response format.');
+        throw new Error('Invalid API response format.');
       }
 
-      console.log(
-        `Fetched ${realTimeDataArray.length} real-time stock records`,
-      );
-
       for (const realTimeData of realTimeDataArray) {
-        // Handle null values by providing defaults
         const data = {
           SCRIPCODE: realTimeData.SCRIPCODE.toString(),
           OPEN: realTimeData.OPEN || 0,
@@ -241,21 +213,49 @@ export class StocksService {
           createdAt: new Date(),
         };
 
-        // Upsert the data
-        await this.prisma.realTimeStockData.upsert({
-          where: { SCRIPCODE: realTimeData.SCRIPCODE.toString() },
-          update: data,
-          create: data,
+        // Fetch stock metadata
+        const metadata = await this.prisma.stockMetadata.findUnique({
+          where: { SCRIPCODE: data.SCRIPCODE },
         });
+
+        if (!metadata) {
+          this.logger.warn(
+            `Metadata not found for SCRIPCODE: ${data.SCRIPCODE}`,
+          );
+          continue;
+        }
+
+        // Merge real-time data with metadata
+        const stockUpdate = { ...data, metadata };
+
+        // Send update to WebSocket clients
+        this.stocksGateway.sendStockUpdate(stockUpdate);
+
+        // Save real-time data to the database
+        this.saveRealtimeStockData(data);
       }
-      return realTimeDataArray;
     } catch (error) {
-      console.error('Error fetching and saving real-time stock data:', error);
-      throw error;
+      this.logger.error('Error fetching real-time stock data:', error);
     }
   }
 
+  private async saveRealtimeStockData(data: any) {
+    try {
+      await this.prisma.realTimeStockData.upsert({
+        where: { SCRIPCODE: data.SCRIPCODE },
+        update: data,
+        create: data,
+      });
+    } catch (error) {
+      this.logger.error('Error saving stock data:', error);
+    }
+  }
+
+  afterInit() {
+    console.log('WebSocket server initialized');
+  }
   // Helper functions
+
   private calculateMovingAverage(stockData: StockDataDto[]) {
     const sum = stockData.reduce((acc, data) => acc + data.ltp, 0);
     return sum / stockData.length;

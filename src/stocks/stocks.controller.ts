@@ -65,10 +65,4 @@ export class StocksController {
   async fetchMetadata() {
     return this.stocksService.fetchAndSaveStockMetadata();
   }
-
-  @Public()
-  @Get('fetch-real-time-data')
-  async fetchRealTimeData() {
-    return this.stocksService.fetchAndSaveRealTimeData();
-  }
 }

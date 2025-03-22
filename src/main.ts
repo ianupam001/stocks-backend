@@ -5,6 +5,7 @@ import * as basicAuth from 'express-basic-auth';
 import { AppModule } from './app.module';
 
 import * as dotenv from 'dotenv';
+import { IoAdapter } from '@nestjs/platform-socket.io';
 
 dotenv.config();
 
@@ -19,6 +20,7 @@ async function bootstrap() {
   });
 
   app.useGlobalPipes(new ValidationPipe());
+  app.useWebSocketAdapter(new IoAdapter(app));
   app.setGlobalPrefix('api');
   app.enableVersioning({
     type: VersioningType.URI,

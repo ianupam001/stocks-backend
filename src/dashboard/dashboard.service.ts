@@ -38,19 +38,37 @@ export class DashboardService {
     const mostActiveStocks = await this.prisma.realTimeStockData.findMany({
       orderBy: { VOLUME: 'desc' },
       take: 5,
-      select: { SCRIPCODE: true, VOLUME: true },
+      select: {
+        SCRIPCODE: true,
+        VOLUME: true,
+        stockMetadata: {
+          select: { COMPNAME: true },
+        },
+      },
     });
 
     const topGainers = await this.prisma.realTimeStockData.findMany({
       orderBy: { HIGH: 'desc' },
       take: 5,
-      select: { SCRIPCODE: true, HIGH: true },
+      select: {
+        SCRIPCODE: true,
+        HIGH: true,
+        stockMetadata: {
+          select: { COMPNAME: true },
+        },
+      },
     });
 
     const topLosers = await this.prisma.realTimeStockData.findMany({
       orderBy: { LOW: 'asc' },
       take: 5,
-      select: { SCRIPCODE: true, LOW: true },
+      select: {
+        SCRIPCODE: true,
+        LOW: true,
+        stockMetadata: {
+          select: { COMPNAME: true },
+        },
+      },
     });
 
     return {
